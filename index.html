@@ -164,7 +164,7 @@
 <div id="galleryScreen" class="screen">
   <header>
     <div class="user" id="userLabel"></div>
-    <button onclick="manualRefresh()">Refresh</button>
+    <button onclick="loadImages()">Refresh</button>
     <button class="danger" onclick="clearImages()">Clear</button>
   </header>
 
@@ -176,10 +176,7 @@
 
 <script>
   const API = "https://image-api-keyc.onrender.com";
-
   let userId = null;
-  let timer = null;
-  let lastImageSignature = null;
 
   async function login() {
     const input = document.getElementById("userInput");
@@ -191,7 +188,6 @@
     btn.disabled = true;
     btn.textContent = "Loading…";
 
-    // Create user (idempotent)
     await fetch(`${API}/users/${id}`, { method: "POST" });
 
     userId = id;
@@ -200,15 +196,17 @@
     document.getElementById("loginScreen").classList.remove("active");
     document.getElementById("galleryScreen").classList.add("active");
 
-    await loadImages(true);
-    startAutoRefresh();
+    loadImages();
   }
 
-  async function loadImages(force = false) {
+  async function loadImages() {
     if (!userId) return;
 
     const grid = document.getElementById("grid");
     const status = document.getElementById("status");
+
+    grid.innerHTML = "";
+    status.textContent = "Loading images…";
 
     const res = await fetch(`${API}/users/${userId}/images`, {
       cache: "no-store"
@@ -223,14 +221,6 @@
     const matches = [...html.matchAll(/images\/(\d+)/g)];
     const indexes = [...new Set(matches.map(m => m[1]))].sort();
 
-    const signature = indexes.join(",");
-
-    // Nothing changed → do nothing
-    if (!force && signature === lastImageSignature) {
-      return;
-    }
-
-    lastImageSignature = signature;
     grid.innerHTML = "";
     status.textContent = "";
 
@@ -256,28 +246,12 @@
     }
   }
 
-  function manualRefresh() {
-    loadImages(true);
-  }
-
   async function clearImages() {
     if (!confirm("Delete all images?")) return;
 
     await fetch(`${API}/users/${userId}/images`, { method: "DELETE" });
-    lastImageSignature = null;
-    loadImages(true);
+    loadImages();
   }
-
-  function startAutoRefresh() {
-    if (timer) return;
-    timer = setInterval(loadImages, 5000);
-  }
-
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) {
-      loadImages();
-    }
-  });
 </script>
 
 </body>
