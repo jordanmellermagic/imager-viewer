@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Image Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #0f1115;
+      color: #e6e6e6;
+    }
+
+    header {
+      padding: 16px;
+      border-bottom: 1px solid #222;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    input {
+      background: #1a1d24;
+      border: 1px solid #333;
+      color: #fff;
+      padding: 8px 10px;
+      border-radius: 6px;
+    }
+
+    button {
+      background: #1f6feb;
+      border: none;
+      color: white;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    button.danger {
+      background: #b42318;
+    }
+
+    button.secondary {
+      background: #30363d;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    main {
+      padding: 16px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .tile {
+      background: #161b22;
+      border: 1px solid #222;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .tile img {
+      width: 100%;
+      display: block;
+    }
+
+    .tile .label {
+      padding: 6px;
+      text-align: center;
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .empty {
+      opacity: 0.6;
+      margin-top: 24px;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <input id="userId" placeholder="User ID (e.g. Jordan)" />
+  <button onclick="loadImages()">Load</button>
+  <button class="secondary" onclick="loadImages()">Refresh</button>
+  <button class="danger" onclick="clearImages()">Clear All</button>
+</header>
+
+<main>
+  <div id="grid" class="grid"></div>
+  <div id="empty" class="empty" style="display:none;">
+    No images found.
+  </div>
+</main>
+
+<script>
+  const API_BASE = "https://image-api-keyc.onrender.com";
+
+  async function loadImages() {
+    const userId = document.getElementById("userId").value.trim();
+    if (!userId) {
+      alert("Enter a user ID");
+      return;
+    }
+
+    const grid = document.getElementById("grid");
+    const empty = document.getElementById("empty");
+
+    grid.innerHTML = "";
+    empty.style.display = "none";
+
+    // Fetch the HTML page but parse indexes manually
+    const response = await fetch(`${API_BASE}/users/${userId}/images`, {
+      cache: "no-store"
+    });
+
+    if (!response.ok) {
+      empty.textContent = "User not found or no images.";
+      empty.style.display = "block";
+      return;
+    }
+
+    const html = await response.text();
+
+    // Extract indexes from image URLs
+    const matches = [...html.matchAll(/images\/(\d+)/g)];
+    const indexes = [...new Set(matches.map(m => m[1]))];
+
+    if (indexes.length === 0) {
+      empty.style.display = "block";
+      return;
+    }
+
+    for (const idx of indexes) {
+      const tile = document.createElement("div");
+      tile.className = "tile";
+
+      const img = document.createElement("img");
+      img.src = `${API_BASE}/users/${userId}/images/${idx}?ts=${Date.now()}`;
+
+      const label = document.createElement("div");
+      label.className = "label";
+      label.textContent = `#${idx}`;
+
+      tile.appendChild(img);
+      tile.appendChild(label);
+      grid.appendChild(tile);
+    }
+  }
+
+  async function clearImages() {
+    const userId = document.getElementById("userId").value.trim();
+    if (!userId) {
+      alert("Enter a user ID");
+      return;
+    }
+
+    if (!confirm("Delete ALL images for this user?")) return;
+
+    const res = await fetch(`${API_BASE}/users/${userId}/images`, {
+      method: "DELETE"
+    });
+
+    if (res.ok) {
+      loadImages();
+    } else {
+      alert("Failed to clear images");
+    }
+  }
+</script>
+
+</body>
+</html>
