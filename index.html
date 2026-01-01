@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Image Viewer</title>
+  <title>Image Gallery</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <style>
@@ -15,38 +15,106 @@
       color: #e6e6e6;
     }
 
+    .screen {
+      display: none;
+      min-height: 100vh;
+    }
+
+    .screen.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---------- LOGIN ---------- */
+
+    .login {
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      gap: 16px;
+    }
+
+    .card {
+      background: #161b22;
+      border: 1px solid #222;
+      border-radius: 12px;
+      padding: 24px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+
+    .card h1 {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      text-align: center;
+    }
+
+    .card p {
+      margin: 0 0 16px 0;
+      font-size: 14px;
+      opacity: 0.7;
+      text-align: center;
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      background: #0f1115;
+      border: 1px solid #333;
+      color: #fff;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      background: #1f6feb;
+      border: none;
+      color: white;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+
+    /* ---------- GALLERY ---------- */
+
     header {
       padding: 12px;
       border-bottom: 1px solid #222;
       display: flex;
       gap: 8px;
-      flex-wrap: wrap;
       align-items: center;
     }
 
-    input {
-      background: #1a1d24;
-      border: 1px solid #333;
-      color: #fff;
-      padding: 8px 10px;
-      border-radius: 6px;
+    header .user {
       flex: 1;
-      min-width: 160px;
+      font-weight: 500;
+      opacity: 0.9;
     }
 
-    button {
-      background: #1f6feb;
-      border: none;
-      color: white;
-      padding: 8px 14px;
-      border-radius: 6px;
-      cursor: pointer;
+    header button {
+      width: auto;
+      padding: 8px 12px;
+      font-size: 14px;
     }
 
-    button.secondary { background: #30363d; }
-    button.danger { background: #b42318; }
+    header .danger {
+      background: #b42318;
+    }
 
-    main { padding: 16px; }
+    main {
+      padding: 16px;
+      flex: 1;
+    }
 
     .grid {
       display: grid;
@@ -57,7 +125,7 @@
     .tile {
       background: #161b22;
       border: 1px solid #222;
-      border-radius: 8px;
+      border-radius: 10px;
       overflow: hidden;
     }
 
@@ -73,68 +141,80 @@
       opacity: 0.8;
     }
 
-    .empty {
-      opacity: 0.6;
-      margin-top: 24px;
+    .status {
       text-align: center;
+      opacity: 0.6;
+      margin-top: 32px;
     }
   </style>
 </head>
 
 <body>
 
-<header>
-  <input id="userId" placeholder="User ID (e.g. Jordan)" />
-  <button onclick="initAndLoad()">Load</button>
-  <button class="secondary" onclick="loadImages()">Refresh</button>
-  <button class="danger" onclick="clearImages()">Clear All</button>
-</header>
-
-<main>
-  <div id="grid" class="grid"></div>
-  <div id="empty" class="empty" style="display:none;">
-    No images yet.
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" class="screen login active">
+  <div class="card">
+    <h1>Image Gallery</h1>
+    <p>Enter a User ID to create or access images</p>
+    <input id="userInput" placeholder="User ID (e.g. Jordan)" />
+    <button id="loginBtn" onclick="login()">Continue</button>
   </div>
-</main>
+</div>
+
+<!-- GALLERY SCREEN -->
+<div id="galleryScreen" class="screen">
+  <header>
+    <div class="user" id="userLabel"></div>
+    <button onclick="loadImages()">Refresh</button>
+    <button class="danger" onclick="clearImages()">Clear</button>
+  </header>
+
+  <main>
+    <div id="grid" class="grid"></div>
+    <div id="status" class="status"></div>
+  </main>
+</div>
 
 <script>
-  const API_BASE = "https://image-api-keyc.onrender.com";
-  let autoRefreshTimer = null;
-  let currentUserId = null;
+  const API = "https://image-api-keyc.onrender.com";
+  let userId = null;
+  let timer = null;
 
-  async function initAndLoad() {
-    const input = document.getElementById("userId");
-    const userId = input.value.trim();
-    if (!userId) {
-      alert("Enter a user ID");
-      return;
-    }
+  async function login() {
+    const input = document.getElementById("userInput");
+    const btn = document.getElementById("loginBtn");
+    const id = input.value.trim();
 
-    currentUserId = userId;
+    if (!id) return;
 
-    // Create user if not exists (idempotent)
-    await fetch(`${API_BASE}/users/${userId}`, { method: "POST" });
+    btn.disabled = true;
+    btn.textContent = "Loading…";
+
+    // Create user (idempotent)
+    await fetch(`${API}/users/${id}`, { method: "POST" });
+
+    userId = id;
+    document.getElementById("userLabel").textContent = `User: ${id}`;
+
+    document.getElementById("loginScreen").classList.remove("active");
+    document.getElementById("galleryScreen").classList.add("active");
 
     await loadImages();
     startAutoRefresh();
   }
 
   async function loadImages() {
-    if (!currentUserId) return;
+    if (!userId) return;
 
     const grid = document.getElementById("grid");
-    const empty = document.getElementById("empty");
+    const status = document.getElementById("status");
 
     grid.innerHTML = "";
-    empty.style.display = "none";
+    status.textContent = "Loading images…";
 
-    const res = await fetch(
-      `${API_BASE}/users/${currentUserId}/images`,
-      { cache: "no-store" }
-    );
-
+    const res = await fetch(`${API}/users/${userId}/images`, { cache: "no-store" });
     if (!res.ok) {
-      empty.style.display = "block";
+      status.textContent = "Failed to load images.";
       return;
     }
 
@@ -143,16 +223,18 @@
     const indexes = [...new Set(matches.map(m => m[1]))];
 
     if (indexes.length === 0) {
-      empty.style.display = "block";
+      status.textContent = "No images yet.";
       return;
     }
+
+    status.textContent = "";
 
     for (const idx of indexes) {
       const tile = document.createElement("div");
       tile.className = "tile";
 
       const img = document.createElement("img");
-      img.src = `${API_BASE}/users/${currentUserId}/images/${idx}?ts=${Date.now()}`;
+      img.src = `${API}/users/${userId}/images/${idx}?ts=${Date.now()}`;
 
       const label = document.createElement("div");
       label.className = "label";
@@ -165,31 +247,19 @@
   }
 
   async function clearImages() {
-    if (!currentUserId) return;
-    if (!confirm("Delete ALL images for this user?")) return;
+    if (!confirm("Delete all images?")) return;
 
-    const res = await fetch(
-      `${API_BASE}/users/${currentUserId}/images`,
-      { method: "DELETE" }
-    );
-
-    if (res.ok) {
-      loadImages();
-    } else {
-      alert("Failed to clear images");
-    }
+    await fetch(`${API}/users/${userId}/images`, { method: "DELETE" });
+    loadImages();
   }
 
   function startAutoRefresh() {
-    if (autoRefreshTimer) return;
-    autoRefreshTimer = setInterval(loadImages, 5000);
+    if (timer) return;
+    timer = setInterval(loadImages, 5000);
   }
 
-  // Refresh when app becomes active (mobile-friendly)
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) {
-      loadImages();
-    }
+    if (!document.hidden) loadImages();
   });
 </script>
 
