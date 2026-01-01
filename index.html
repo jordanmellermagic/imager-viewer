@@ -6,9 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <style>
-    :root {
-      color-scheme: dark;
-    }
+    :root { color-scheme: dark; }
 
     body {
       margin: 0;
@@ -18,7 +16,7 @@
     }
 
     header {
-      padding: 16px;
+      padding: 12px;
       border-bottom: 1px solid #222;
       display: flex;
       gap: 8px;
@@ -32,6 +30,8 @@
       color: #fff;
       padding: 8px 10px;
       border-radius: 6px;
+      flex: 1;
+      min-width: 160px;
     }
 
     button {
@@ -43,22 +43,10 @@
       cursor: pointer;
     }
 
-    button.danger {
-      background: #b42318;
-    }
+    button.secondary { background: #30363d; }
+    button.danger { background: #b42318; }
 
-    button.secondary {
-      background: #30363d;
-    }
-
-    button:disabled {
-      opacity: 0.6;
-      cursor: default;
-    }
-
-    main {
-      padding: 16px;
-    }
+    main { padding: 16px; }
 
     .grid {
       display: grid;
@@ -78,7 +66,7 @@
       display: block;
     }
 
-    .tile .label {
+    .label {
       padding: 6px;
       text-align: center;
       font-size: 12px;
@@ -97,7 +85,7 @@
 
 <header>
   <input id="userId" placeholder="User ID (e.g. Jordan)" />
-  <button onclick="loadImages()">Load</button>
+  <button onclick="initAndLoad()">Load</button>
   <button class="secondary" onclick="loadImages()">Refresh</button>
   <button class="danger" onclick="clearImages()">Clear All</button>
 </header>
@@ -105,19 +93,34 @@
 <main>
   <div id="grid" class="grid"></div>
   <div id="empty" class="empty" style="display:none;">
-    No images found.
+    No images yet.
   </div>
 </main>
 
 <script>
   const API_BASE = "https://image-api-keyc.onrender.com";
+  let autoRefreshTimer = null;
+  let currentUserId = null;
 
-  async function loadImages() {
-    const userId = document.getElementById("userId").value.trim();
+  async function initAndLoad() {
+    const input = document.getElementById("userId");
+    const userId = input.value.trim();
     if (!userId) {
       alert("Enter a user ID");
       return;
     }
+
+    currentUserId = userId;
+
+    // Create user if not exists (idempotent)
+    await fetch(`${API_BASE}/users/${userId}`, { method: "POST" });
+
+    await loadImages();
+    startAutoRefresh();
+  }
+
+  async function loadImages() {
+    if (!currentUserId) return;
 
     const grid = document.getElementById("grid");
     const empty = document.getElementById("empty");
@@ -125,20 +128,17 @@
     grid.innerHTML = "";
     empty.style.display = "none";
 
-    // Fetch the HTML page but parse indexes manually
-    const response = await fetch(`${API_BASE}/users/${userId}/images`, {
-      cache: "no-store"
-    });
+    const res = await fetch(
+      `${API_BASE}/users/${currentUserId}/images`,
+      { cache: "no-store" }
+    );
 
-    if (!response.ok) {
-      empty.textContent = "User not found or no images.";
+    if (!res.ok) {
       empty.style.display = "block";
       return;
     }
 
-    const html = await response.text();
-
-    // Extract indexes from image URLs
+    const html = await res.text();
     const matches = [...html.matchAll(/images\/(\d+)/g)];
     const indexes = [...new Set(matches.map(m => m[1]))];
 
@@ -152,7 +152,7 @@
       tile.className = "tile";
 
       const img = document.createElement("img");
-      img.src = `${API_BASE}/users/${userId}/images/${idx}?ts=${Date.now()}`;
+      img.src = `${API_BASE}/users/${currentUserId}/images/${idx}?ts=${Date.now()}`;
 
       const label = document.createElement("div");
       label.className = "label";
@@ -165,17 +165,13 @@
   }
 
   async function clearImages() {
-    const userId = document.getElementById("userId").value.trim();
-    if (!userId) {
-      alert("Enter a user ID");
-      return;
-    }
-
+    if (!currentUserId) return;
     if (!confirm("Delete ALL images for this user?")) return;
 
-    const res = await fetch(`${API_BASE}/users/${userId}/images`, {
-      method: "DELETE"
-    });
+    const res = await fetch(
+      `${API_BASE}/users/${currentUserId}/images`,
+      { method: "DELETE" }
+    );
 
     if (res.ok) {
       loadImages();
@@ -183,6 +179,18 @@
       alert("Failed to clear images");
     }
   }
+
+  function startAutoRefresh() {
+    if (autoRefreshTimer) return;
+    autoRefreshTimer = setInterval(loadImages, 5000);
+  }
+
+  // Refresh when app becomes active (mobile-friendly)
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      loadImages();
+    }
+  });
 </script>
 
 </body>
