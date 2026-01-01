@@ -31,22 +31,21 @@
       justify-content: center;
       align-items: center;
       padding: 24px;
-      gap: 16px;
     }
 
     .card {
       background: #161b22;
       border: 1px solid #222;
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 24px;
       width: 100%;
       max-width: 360px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.45);
     }
 
     .card h1 {
       margin: 0 0 8px 0;
-      font-size: 20px;
+      font-size: 22px;
       text-align: center;
     }
 
@@ -165,7 +164,7 @@
 <div id="galleryScreen" class="screen">
   <header>
     <div class="user" id="userLabel"></div>
-    <button onclick="loadImages()">Refresh</button>
+    <button onclick="manualRefresh()">Refresh</button>
     <button class="danger" onclick="clearImages()">Clear</button>
   </header>
 
@@ -177,8 +176,10 @@
 
 <script>
   const API = "https://image-api-keyc.onrender.com";
+
   let userId = null;
   let timer = null;
+  let lastImageSignature = null;
 
   async function login() {
     const input = document.getElementById("userInput");
@@ -199,20 +200,20 @@
     document.getElementById("loginScreen").classList.remove("active");
     document.getElementById("galleryScreen").classList.add("active");
 
-    await loadImages();
+    await loadImages(true);
     startAutoRefresh();
   }
 
-  async function loadImages() {
+  async function loadImages(force = false) {
     if (!userId) return;
 
     const grid = document.getElementById("grid");
     const status = document.getElementById("status");
 
-    grid.innerHTML = "";
-    status.textContent = "Loading images…";
+    const res = await fetch(`${API}/users/${userId}/images`, {
+      cache: "no-store"
+    });
 
-    const res = await fetch(`${API}/users/${userId}/images`, { cache: "no-store" });
     if (!res.ok) {
       status.textContent = "Failed to load images.";
       return;
@@ -220,14 +221,23 @@
 
     const html = await res.text();
     const matches = [...html.matchAll(/images\/(\d+)/g)];
-    const indexes = [...new Set(matches.map(m => m[1]))];
+    const indexes = [...new Set(matches.map(m => m[1]))].sort();
+
+    const signature = indexes.join(",");
+
+    // Nothing changed → do nothing
+    if (!force && signature === lastImageSignature) {
+      return;
+    }
+
+    lastImageSignature = signature;
+    grid.innerHTML = "";
+    status.textContent = "";
 
     if (indexes.length === 0) {
       status.textContent = "No images yet.";
       return;
     }
-
-    status.textContent = "";
 
     for (const idx of indexes) {
       const tile = document.createElement("div");
@@ -246,11 +256,16 @@
     }
   }
 
+  function manualRefresh() {
+    loadImages(true);
+  }
+
   async function clearImages() {
     if (!confirm("Delete all images?")) return;
 
     await fetch(`${API}/users/${userId}/images`, { method: "DELETE" });
-    loadImages();
+    lastImageSignature = null;
+    loadImages(true);
   }
 
   function startAutoRefresh() {
@@ -259,7 +274,9 @@
   }
 
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) loadImages();
+    if (!document.hidden) {
+      loadImages();
+    }
   });
 </script>
 
